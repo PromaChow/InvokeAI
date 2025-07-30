@@ -2,7 +2,7 @@ name: python tests
 on:
   push:
     branches:
-      - main
+      - temp
   workflow_dispatch:
     inputs:
       always_run:
