@@ -3,7 +3,12 @@ on:
   push:
     branches:
       - main
-
+  workflow_dispatch: # ✅ Declare inputs here
+    inputs:
+      always_run:
+        description: 'Force run all jobs'
+        required: false
+        default: 'false'
 concurrency:
   cancel-in-progress: true
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -30,27 +35,21 @@ jobs:
           files_yaml:
             "python:\n  - 'pyproject.toml'\n  - 'invokeai/**'\n  - '!invokeai/frontend/web/**'\n\
             \  - 'tests/**'\n"
-      - if:
-          ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
-          == true }}
+      - if: ${{ steps.changed-files.outputs.python_any_changed == 'false' || inputs.always_run == true }}
         name: setup uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
           version: 0.6.10
-      - if:
-          ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
-          == true }}
+      - if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run == true }}
         name: setup python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - env:
           UV_INDEX: ${{ matrix.extra-index-url }}
-        if:
-          ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
-          == true }}
+        if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run == true }}
         name: install dependencies
         run: uv pip install --editable ".[test]"
       - id: measurement-6
