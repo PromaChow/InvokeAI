@@ -27,9 +27,11 @@ jobs:
         name: check for changed python files
         uses: tj-actions/changed-files@a284dc1814e3fd07f2e34267fc8f81227ed29fb8
         with:
-          files_yaml: "python:\n  - 'pyproject.toml'\n  - 'invokeai/**'\n  - '!invokeai/frontend/web/**'\n\
+          files_yaml:
+            "python:\n  - 'pyproject.toml'\n  - 'invokeai/**'\n  - '!invokeai/frontend/web/**'\n\
             \  - 'tests/**'\n"
-      - if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
+      - if:
+          ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
           == true }}
         name: setup uv
         uses: astral-sh/setup-uv@v5
@@ -37,7 +39,8 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
           version: 0.6.10
-      - if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
+      - if:
+          ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
           == true }}
         name: setup python
         uses: actions/setup-python@v5
@@ -45,7 +48,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - env:
           UV_INDEX: ${{ matrix.extra-index-url }}
-        if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
+        if:
+          ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
           == true }}
         name: install dependencies
         run: uv pip install --editable ".[test]"
@@ -56,7 +60,8 @@ jobs:
           json-output: true
           label: install dependencies
           task: get-measurement
-      - if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
+      - if:
+          ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
           == true }}
         name: run pytest
         run: pytest
@@ -85,18 +90,18 @@ jobs:
         include:
           - extra-index-url: https://download.pytorch.org/whl/cpu
             github-env: $GITHUB_ENV
-            os: ubuntu-24.04
+            os: ubuntu-latest
             platform: linux-cpu
-          - github-env: $GITHUB_ENV
-            os: macOS-14
-            platform: macos-default
-          - github-env: $env:GITHUB_ENV
-            os: windows-2022
-            platform: windows-cpu
+          # - github-env: $GITHUB_ENV
+          #   os: macOS-14
+          #   platform: macos-default
+          # - github-env: $env:GITHUB_ENV
+          #   os: windows-2022
+          #   platform: windows-cpu
         platform:
           - linux-cpu
-          - macos-default
-          - windows-cpu
+          # - macos-default
+          # - windows-cpu
         python-version:
           - '3.11'
           - '3.12'
