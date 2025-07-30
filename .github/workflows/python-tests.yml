@@ -35,7 +35,8 @@ jobs:
           files_yaml:
             "python:\n  - 'pyproject.toml'\n  - 'invokeai/**'\n  - '!invokeai/frontend/web/**'\n\
             \  - 'tests/**'\n"
-      - if: ${{ steps.changed-files.outputs.python_any_changed == 'false' || inputs.always_run == true }}
+      - if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run == 'true' }}
+
         name: setup uv
         uses: astral-sh/setup-uv@v5
         with:
