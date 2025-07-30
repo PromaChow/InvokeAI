@@ -3,6 +3,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      always_run:
+        description: 'Force run all jobs'
+        required: false
+        default: 'false'
 
 concurrency:
   cancel-in-progress: true
