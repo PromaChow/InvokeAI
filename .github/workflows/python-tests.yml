@@ -10,8 +10,8 @@ on:
         required: false
         default: 'false'
 concurrency:
-  cancel-in-progress: true
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: false
 jobs:
   matrix:
     env:
