@@ -1,85 +1,103 @@
-# Runs frontend code quality checks.
-#
-# Checks for changes to frontend files before running the checks.
-# If always_run is true, always runs the checks.
-
-name: 'frontend checks'
-
+name: frontend checks
 on:
   push:
     branches:
-      - 'main'
-  pull_request:
-    types:
-      - 'ready_for_review'
-      - 'opened'
-      - 'synchronize'
-  merge_group:
-  workflow_dispatch:
-    inputs:
-      always_run:
-        description: 'Always run the checks'
-        required: true
-        type: boolean
-        default: true
-  workflow_call:
-    inputs:
-      always_run:
-        description: 'Always run the checks'
-        required: true
-        type: boolean
-        default: true
+      - main
 
 defaults:
   run:
     working-directory: invokeai/frontend/web
-
 jobs:
   frontend-checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 10 # expected run time: <2 min
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - uses: actions/checkout@v4
-
-      - name: check for changed frontend files
+      - id: changed-files
         if: ${{ inputs.always_run != true }}
-        id: changed-files
-        # Pinned to the _hash_ for v45.0.9 to prevent supply-chain attacks.
-        # See:
-        # - CVE-2025-30066
-        # - https://www.stepsecurity.io/blog/harden-runner-detection-tj-actions-changed-files-action-is-compromised
-        # - https://github.com/tj-actions/changed-files/issues/2463
+        name: check for changed frontend files
         uses: tj-actions/changed-files@a284dc1814e3fd07f2e34267fc8f81227ed29fb8
         with:
-          files_yaml: |
-            frontend:
-              - 'invokeai/frontend/web/**'
-
-      - name: install dependencies
-        if: ${{ steps.changed-files.outputs.frontend_any_changed == 'true' || inputs.always_run == true }}
+          files_yaml: "frontend:\n  - 'invokeai/frontend/web/**'\n"
+      - if: ${{ steps.changed-files.outputs.frontend_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: install dependencies
         uses: ./.github/actions/install-frontend-deps
-
-      - name: tsc
-        if: ${{ steps.changed-files.outputs.frontend_any_changed == 'true' || inputs.always_run == true }}
-        run: 'pnpm lint:tsc'
+      - if: ${{ steps.changed-files.outputs.frontend_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: tsc
+        run: pnpm lint:tsc
         shell: bash
-
-      - name: dpdm
-        if: ${{ steps.changed-files.outputs.frontend_any_changed == 'true' || inputs.always_run == true }}
-        run: 'pnpm lint:dpdm'
+      - id: measurement-5
+        name: Record Measurement After tsc
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: tsc
+          task: get-measurement
+      - if: ${{ steps.changed-files.outputs.frontend_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: dpdm
+        run: pnpm lint:dpdm
         shell: bash
-
-      - name: eslint
-        if: ${{ steps.changed-files.outputs.frontend_any_changed == 'true' || inputs.always_run == true }}
-        run: 'pnpm lint:eslint'
+      - id: measurement-7
+        name: Record Measurement After dpdm
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: dpdm
+          task: get-measurement
+      - if: ${{ steps.changed-files.outputs.frontend_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: eslint
+        run: pnpm lint:eslint
         shell: bash
-
-      - name: prettier
-        if: ${{ steps.changed-files.outputs.frontend_any_changed == 'true' || inputs.always_run == true }}
-        run: 'pnpm lint:prettier'
+      - id: measurement-9
+        name: Record Measurement After eslint
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: eslint
+          task: get-measurement
+      - if: ${{ steps.changed-files.outputs.frontend_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: prettier
+        run: pnpm lint:prettier
         shell: bash
-
-      - name: knip
-        if: ${{ steps.changed-files.outputs.frontend_any_changed == 'true' || inputs.always_run == true }}
-        run: 'pnpm lint:knip'
+      - id: measurement-11
+        name: Record Measurement After prettier
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: prettier
+          task: get-measurement
+      - if: ${{ steps.changed-files.outputs.frontend_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: knip
+        run: pnpm lint:knip
         shell: bash
+      - id: measurement-13
+        name: Record Measurement After knip
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: knip
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+    timeout-minutes: 10

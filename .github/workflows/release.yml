@@ -1,108 +1,232 @@
-# Main release workflow. Triggered on tag push or manual trigger.
-#
-# - Runs all code checks and tests
-# - Verifies the app version matches the tag version.
-# - Builds the installer and build, uploading them as artifacts.
-# - Publishes to TestPyPI and PyPI. Both are conditional on the previous steps passing and require a manual approval.
-#
-# See docs/RELEASE.md for more information on the release process.
-
 name: release
-
 on:
   push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
+  build:
+    steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+    uses: ./.github/workflows/build-wheel.yml
   check-version:
     runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - name: checkout
         uses: actions/checkout@v4
-
-      - name: check python version
+      - id: check-python-version
+        name: check python version
         uses: samuelcolvin/check-python-version@v4
-        id: check-python-version
         with:
           version_file_path: invokeai/version/invokeai_version.py
-
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
   frontend-checks:
+    steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
     uses: ./.github/workflows/frontend-checks.yml
     with:
       always_run: true
-
   frontend-tests:
+    steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
     uses: ./.github/workflows/frontend-tests.yml
     with:
       always_run: true
-
-  python-checks:
-    uses: ./.github/workflows/python-checks.yml
-    with:
-      always_run: true
-
-  python-tests:
-    uses: ./.github/workflows/python-tests.yml
-    with:
-      always_run: true
-
-  build:
-    uses: ./.github/workflows/build-wheel.yml
-
-  publish-testpypi:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5 # expected run time: <1 min
-    needs:
-      [
-        check-version,
-        frontend-checks,
-        frontend-tests,
-        python-checks,
-        python-tests,
-        build,
-      ]
+  publish-pypi:
     environment:
-      name: testpypi
-      url: https://test.pypi.org/p/invokeai
+      name: pypi
+      url: https://pypi.org/p/invokeai
+    needs:
+      - check-version
+      - frontend-checks
+      - frontend-tests
+      - python-checks
+      - python-tests
+      - build
     permissions:
       id-token: write
+    runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - name: download distribution from build job
         uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
-
+      - name: publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+    timeout-minutes: 5
+  publish-testpypi:
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/invokeai
+    needs:
+      - check-version
+      - frontend-checks
+      - frontend-tests
+      - python-checks
+      - python-tests
+      - build
+    permissions:
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
+      - name: download distribution from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
       - name: publish distribution to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-
-  publish-pypi:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5 # expected run time: <1 min
-    needs:
-      [
-        check-version,
-        frontend-checks,
-        frontend-tests,
-        python-checks,
-        python-tests,
-        build,
-      ]
-    environment:
-      name: pypi
-      url: https://pypi.org/p/invokeai
-    permissions:
-      id-token: write
-    steps:
-      - name: download distribution from build job
-        uses: actions/download-artifact@v4
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
         with:
-          name: dist
-          path: dist/
-
-      - name: publish distribution to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+    timeout-minutes: 5
+  python-checks:
+    steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+    uses: ./.github/workflows/python-checks.yml
+    with:
+      always_run: true
+  python-tests:
+    steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+    uses: ./.github/workflows/python-tests.yml
+    with:
+      always_run: true

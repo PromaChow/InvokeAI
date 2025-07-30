@@ -1,6 +1,8 @@
-name: 'label PRs'
+name: label PRs
 on:
-  - pull_request_target
+  push:
+    branches:
+      - main
 
 jobs:
   labeler:
@@ -9,10 +11,27 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - name: checkout
         uses: actions/checkout@v4
-
       - name: label PRs
         uses: actions/labeler@v5
         with:
           configuration-path: .github/pr_labels.yml
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json

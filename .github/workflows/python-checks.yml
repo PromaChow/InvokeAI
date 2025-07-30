@@ -1,82 +1,82 @@
-# Runs python code quality checks.
-#
-# Checks for changes to python files before running the checks.
-# If always_run is true, always runs the checks.
-#
-# TODO: Add mypy or pyright to the checks.
-
-name: 'python checks'
-
+name: python checks
 on:
   push:
     branches:
-      - 'main'
-  pull_request:
-    types:
-      - 'ready_for_review'
-      - 'opened'
-      - 'synchronize'
-  merge_group:
-  workflow_dispatch:
-    inputs:
-      always_run:
-        description: 'Always run the checks'
-        required: true
-        type: boolean
-        default: true
-  workflow_call:
-    inputs:
-      always_run:
-        description: 'Always run the checks'
-        required: true
-        type: boolean
-        default: true
+      - main
 
 jobs:
   python-checks:
     env:
-      # uv requires a venv by default - but for this, we can simply use the system python
       UV_SYSTEM_PYTHON: 1
     runs-on: ubuntu-latest
-    timeout-minutes: 5 # expected run time: <1 min
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - name: checkout
         uses: actions/checkout@v4
-
-      - name: check for changed python files
+      - id: changed-files
         if: ${{ inputs.always_run != true }}
-        id: changed-files
-        # Pinned to the _hash_ for v45.0.9 to prevent supply-chain attacks.
-        # See:
-        # - CVE-2025-30066
-        # - https://www.stepsecurity.io/blog/harden-runner-detection-tj-actions-changed-files-action-is-compromised
-        # - https://github.com/tj-actions/changed-files/issues/2463
+        name: check for changed python files
         uses: tj-actions/changed-files@a284dc1814e3fd07f2e34267fc8f81227ed29fb8
         with:
-          files_yaml: |
-            python:
-              - 'pyproject.toml'
-              - 'invokeai/**'
-              - '!invokeai/frontend/web/**'
-              - 'tests/**'
-
-      - name: setup uv
-        if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run == true }}
+          files_yaml: "python:\n  - 'pyproject.toml'\n  - 'invokeai/**'\n  - '!invokeai/frontend/web/**'\n\
+            \  - 'tests/**'\n"
+      - if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: setup uv
         uses: astral-sh/setup-uv@v5
         with:
-          version: '0.6.10'
           enable-cache: true
-
-      - name: check pypi classifiers
-        if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run == true }}
+          version: 0.6.10
+      - if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: check pypi classifiers
         run: uv run --no-project scripts/check_classifiers.py ./pyproject.toml
-
-      - name: ruff check
-        if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run == true }}
+      - id: measurement-5
+        name: Record Measurement After check pypi classifiers
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: check pypi classifiers
+          task: get-measurement
+      - if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: ruff check
         run: uv tool run ruff@0.11.2 check --output-format=github .
         shell: bash
-
-      - name: ruff format
-        if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run == true }}
+      - id: measurement-7
+        name: Record Measurement After ruff check
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: ruff check
+          task: get-measurement
+      - if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: ruff format
         run: uv tool run ruff@0.11.2 format --check .
         shell: bash
+      - id: measurement-9
+        name: Record Measurement After ruff format
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: ruff format
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+    timeout-minutes: 5

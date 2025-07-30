@@ -1,28 +1,50 @@
 name: Close inactive issues
 on:
-  schedule:
-    - cron: "00 4 * * *"
+  push:
+    branches:
+      - main
 
 env:
-  DAYS_BEFORE_ISSUE_STALE: 30
   DAYS_BEFORE_ISSUE_CLOSE: 14
-
+  DAYS_BEFORE_ISSUE_STALE: 30
 jobs:
   close-issues:
-    runs-on: ubuntu-latest
     permissions:
       issues: write
       pull-requests: write
+    runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - uses: actions/stale@v8
         with:
-          days-before-issue-stale: ${{ env.DAYS_BEFORE_ISSUE_STALE }}
+          close-issue-message: Due to inactivity, this issue was automatically closed.
+            If you are still experiencing the issue, please recreate the issue.
           days-before-issue-close: ${{ env.DAYS_BEFORE_ISSUE_CLOSE }}
-          stale-issue-label: "Inactive Issue"
-          stale-issue-message: "There has been no activity in this issue for ${{ env.DAYS_BEFORE_ISSUE_STALE }} days. If this issue is still being experienced, please reply with an updated confirmation that the issue is still being experienced with the latest release."
-          close-issue-message: "Due to inactivity, this issue was automatically closed. If you are still experiencing the issue, please recreate the issue."
-          days-before-pr-stale: -1
+          days-before-issue-stale: ${{ env.DAYS_BEFORE_ISSUE_STALE }}
           days-before-pr-close: -1
-          exempt-issue-labels: "Active Issue"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          days-before-pr-stale: -1
+          exempt-issue-labels: Active Issue
           operations-per-run: 500
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-label: Inactive Issue
+          stale-issue-message: There has been no activity in this issue for ${{ env.DAYS_BEFORE_ISSUE_STALE
+            }} days. If this issue is still being experienced, please reply with an
+            updated confirmation that the issue is still being experienced with the
+            latest release.
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json

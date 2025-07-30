@@ -1,110 +1,103 @@
-# Runs python tests on a matrix of python versions and platforms.
-#
-# Checks for changes to python files before running the tests.
-# If always_run is true, always runs the tests.
-
-name: 'python tests'
-
+name: python tests
 on:
   push:
     branches:
-      - 'main'
-  pull_request:
-    types:
-      - 'ready_for_review'
-      - 'opened'
-      - 'synchronize'
-  merge_group:
-  workflow_dispatch:
-    inputs:
-      always_run:
-        description: 'Always run the tests'
-        required: true
-        type: boolean
-        default: true
-  workflow_call:
-    inputs:
-      always_run:
-        description: 'Always run the tests'
-        required: true
-        type: boolean
-        default: true
+      - main
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
-
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
 jobs:
   matrix:
+    env:
+      PIP_USE_PEP517: '1'
+      UV_SYSTEM_PYTHON: 1
+    name: 'py${{ matrix.python-version }}: ${{ matrix.platform }}'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
+      - name: checkout
+        uses: nschloe/action-cached-lfs-checkout@f46300cd8952454b9f0a21a3d133d4bd5684cfc2
+      - id: changed-files
+        if: ${{ inputs.always_run != true }}
+        name: check for changed python files
+        uses: tj-actions/changed-files@a284dc1814e3fd07f2e34267fc8f81227ed29fb8
+        with:
+          files_yaml: "python:\n  - 'pyproject.toml'\n  - 'invokeai/**'\n  - '!invokeai/frontend/web/**'\n\
+            \  - 'tests/**'\n"
+      - if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+          version: 0.6.10
+      - if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - env:
+          UV_INDEX: ${{ matrix.extra-index-url }}
+        if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: install dependencies
+        run: uv pip install --editable ".[test]"
+      - id: measurement-6
+        name: Record Measurement After install dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: install dependencies
+          task: get-measurement
+      - if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run
+          == true }}
+        name: run pytest
+        run: pytest
+      - id: measurement-8
+        name: Record Measurement After run pytest
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: run pytest
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
     strategy:
       matrix:
-        python-version:
-          - '3.11'
-          - '3.12'
+        include:
+          - extra-index-url: https://download.pytorch.org/whl/cpu
+            github-env: $GITHUB_ENV
+            os: ubuntu-24.04
+            platform: linux-cpu
+          - github-env: $GITHUB_ENV
+            os: macOS-14
+            platform: macos-default
+          - github-env: $env:GITHUB_ENV
+            os: windows-2022
+            platform: windows-cpu
         platform:
           - linux-cpu
           - macos-default
           - windows-cpu
-        include:
-          - platform: linux-cpu
-            os: ubuntu-24.04
-            extra-index-url: 'https://download.pytorch.org/whl/cpu'
-            github-env: $GITHUB_ENV
-          - platform: macos-default
-            os: macOS-14
-            github-env: $GITHUB_ENV
-          - platform: windows-cpu
-            os: windows-2022
-            github-env: $env:GITHUB_ENV
-    name: 'py${{ matrix.python-version }}: ${{ matrix.platform }}'
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15 # expected run time: 2-6 min, depending on platform
-    env:
-      PIP_USE_PEP517: '1'
-      UV_SYSTEM_PYTHON: 1
-
-    steps:
-      - name: checkout
-        # https://github.com/nschloe/action-cached-lfs-checkout
-        uses: nschloe/action-cached-lfs-checkout@f46300cd8952454b9f0a21a3d133d4bd5684cfc2
-
-      - name: check for changed python files
-        if: ${{ inputs.always_run != true }}
-        id: changed-files
-        # Pinned to the _hash_ for v45.0.9 to prevent supply-chain attacks.
-        # See:
-        # - CVE-2025-30066
-        # - https://www.stepsecurity.io/blog/harden-runner-detection-tj-actions-changed-files-action-is-compromised
-        # - https://github.com/tj-actions/changed-files/issues/2463
-        uses: tj-actions/changed-files@a284dc1814e3fd07f2e34267fc8f81227ed29fb8
-        with:
-          files_yaml: |
-            python:
-              - 'pyproject.toml'
-              - 'invokeai/**'
-              - '!invokeai/frontend/web/**'
-              - 'tests/**'
-
-      - name: setup uv
-        if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run == true }}
-        uses: astral-sh/setup-uv@v5
-        with:
-          version: '0.6.10'
-          enable-cache: true
-          python-version: ${{ matrix.python-version }}
-
-      - name: setup python
-        if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run == true }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: install dependencies
-        if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run == true }}
-        env:
-          UV_INDEX: ${{ matrix.extra-index-url }}
-        run: uv pip install --editable ".[test]"
-
-      - name: run pytest
-        if: ${{ steps.changed-files.outputs.python_any_changed == 'true' || inputs.always_run == true }}
-        run: pytest
+        python-version:
+          - '3.11'
+          - '3.12'
+    timeout-minutes: 15

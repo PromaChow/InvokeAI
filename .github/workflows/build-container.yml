@@ -2,107 +2,122 @@ name: build container image
 on:
   push:
     branches:
-      - 'main'
-    paths:
-      - 'pyproject.toml'
-      - '.dockerignore'
-      - 'invokeai/**'
-      - 'docker/Dockerfile'
-      - 'docker/docker-entrypoint.sh'
-      - 'workflows/build-container.yml'
-    tags:
-      - 'v*.*.*'
-  workflow_dispatch:
-    inputs:
-      push-to-registry:
-        description: Push the built image to the container registry
-        required: false
-        type: boolean
-        default: false
-
-permissions:
-  contents: write
-  packages: write
+      - main
 
 jobs:
   docker:
-    if: github.event.pull_request.draft == false
-    strategy:
-      fail-fast: false
-      matrix:
-        gpu-driver:
-        - cuda
-        - cpu
-        - rocm
-    runs-on: ubuntu-latest
-    name: ${{ matrix.gpu-driver }}
     env:
-      # torch/arm64 does not support GPU currently, so arm64 builds
-      # would not be GPU-accelerated.
-      # re-enable arm64 if there is sufficient demand.
-      # PLATFORMS: 'linux/amd64,linux/arm64'
-      PLATFORMS: 'linux/amd64'
+      PLATFORMS: linux/amd64
+    if: github.event.pull_request.draft == false
+    name: ${{ matrix.gpu-driver }}
+    runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - name: Free up more disk space on the runner
-        # https://github.com/actions/runner-images/issues/2840#issuecomment-1284059930
-        run: |
-          echo "----- Free space before cleanup"
-          df -h
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          sudo swapoff /mnt/swapfile
-          sudo rm -rf /mnt/swapfile
-          echo "----- Free space after cleanup"
+        run: 'echo "----- Free space before cleanup"
+
           df -h
 
+          sudo rm -rf /usr/share/dotnet
+
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
+          sudo swapoff /mnt/swapfile
+
+          sudo rm -rf /mnt/swapfile
+
+          echo "----- Free space after cleanup"
+
+          df -h
+
+          '
+      - id: measurement-2
+        name: Record Measurement After Free up more disk space on the runner
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Free up more disk space on the runner
+          task: get-measurement
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Docker meta
-        id: meta
+      - id: meta
+        name: Docker meta
         uses: docker/metadata-action@v5
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          images: |
-            ghcr.io/${{ github.repository }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=pep440,pattern={{version}}
-            type=pep440,pattern={{major}}.{{minor}}
-            type=pep440,pattern={{major}}
-            type=sha,enable=true,prefix=sha-,format=short
-          flavor: |
-            latest=${{ matrix.gpu-driver == 'cuda' && github.ref == 'refs/heads/main' }}
+          flavor:
+            "latest=${{ matrix.gpu-driver == 'cuda' && github.ref == 'refs/heads/main'}}
+
             suffix=-${{ matrix.gpu-driver }},onlatest=false
 
+            "
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          images: 'ghcr.io/${{ github.repository }}
+
+            '
+          tags: 'type=ref,event=branch
+
+            type=ref,event=tag
+
+            type=pep440,pattern={{version}}
+
+            type=pep440,pattern={{major}}.{{minor}}
+
+            type=pep440,pattern={{major}}
+
+            type=sha,enable=true,prefix=sha-,format=short
+
+            '
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
           platforms: ${{ env.PLATFORMS }}
-
-      - name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request'
+      - if: github.event_name != 'pull_request'
+        name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
+          password: ${{ secrets.GITHUB_TOKEN }}
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build container
+      - id: docker_build
+        name: Build container
         timeout-minutes: 40
-        id: docker_build
         uses: docker/build-push-action@v6
         with:
+          build-args: 'GPU_DRIVER=${{ matrix.gpu-driver }}
+
+            '
           context: .
           file: docker/Dockerfile
-          platforms: ${{ env.PLATFORMS }}
-          build-args: |
-            GPU_DRIVER=${{ matrix.gpu-driver }}
-          push: ${{ github.ref == 'refs/heads/main' || github.ref_type == 'tag' || github.event.inputs.push-to-registry }}
-          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # cache-from: |
-          #   type=gha,scope=${{ github.ref_name }}-${{ matrix.gpu-driver }}
-          #   type=gha,scope=main-${{ matrix.gpu-driver }}
-          # cache-to: type=gha,mode=max,scope=${{ github.ref_name }}-${{ matrix.gpu-driver }}
+          platforms: ${{ env.PLATFORMS }}
+          push:
+            ${{ github.ref == 'refs/heads/main' || github.ref_type == 'tag' ||
+            github.event.inputs.push-to-registry }}
+          tags: ${{ steps.meta.outputs.tags }}
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+    strategy:
+      fail-fast: false
+      matrix:
+        gpu-driver:
+          - cuda
+          - cpu
+          - rocm
+permissions:
+  contents: write
+  packages: write
